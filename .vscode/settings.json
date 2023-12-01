@@ -1,0 +1,3 @@
+{
+  "python.defaultInterpreterPath": "~/.local/pipx/venvs/pyinfra/bin/python"
+}
