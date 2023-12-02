@@ -1,0 +1,28 @@
+[
+  {
+    "id": "pocozy_homepage",
+    "execute-command": "/bin/sh",
+    "pass-arguments-to-command": [
+      {
+        "source": "string",
+        "name": "-c"
+      },
+      {
+        "source": "string",
+        "name": "sudo -u {{ __admin }} git pull"
+      }
+    ],
+    "command-working-directory": "/home/{{ __admin }}/pocozy_homepage",
+    "trigger-rule-mismatch-http-response-code": 400,
+    "trigger-rule": {
+      "match": {
+        "type": "value",
+        "value": "{{ __env.POCOZY_WEBHOOK  }}",
+        "parameter": {
+          "source": "header",
+          "name": "X-Gitlab-Token"
+        }
+      }
+    }
+  }
+]
