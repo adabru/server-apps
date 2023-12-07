@@ -1,0 +1,14 @@
+[Unit]
+Description=Renew ssl certificates using acme.sh
+After=network-online.target
+
+[Service]
+Type=oneshot
+# --home's argument should be where the acme.sh script resides.
+ExecStart=/bin/acme.sh --issue -w /home/adabru/acme-challenge --server letsencrypt \
+  -d adabru.de -d infoaghh.de -d pocozy.de -d pocozy.com -d ci.pocozy.de
+ExecStart=/bin/acme.sh --install-cert --server letsencrypt \
+  --key-file       /home/adabru/auth/key.pem  \
+  --fullchain-file /home/adabru/auth/cert.pem \
+  --reloadcmd     "systemctl reload nginx" \
+  -d adabru.de -d infoaghh.de -d pocozy.de -d pocozy.com -d ci.pocozy.de
