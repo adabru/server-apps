@@ -1,1 +1,7 @@
+
+# venv
+.pyinfra/
+.telegram/
+
 .env
+telegram/private-key.json
