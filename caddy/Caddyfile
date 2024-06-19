@@ -1,0 +1,41 @@
+
+adabru.de {
+	# homepage
+	root * /home/adabru/homepage
+	file_server {
+		index index.txt
+	}
+
+	# filesharing
+	handle_path /d/* {
+		root * /home/adabru/filesharing
+		file_server
+	}
+
+	# webhooks
+	handle_path /webhook/* {
+		reverse_proxy http://localhost:9000
+	}
+
+	# daniel
+	handle_path /daniel/* {
+		root * /home/adabru/daniel
+		file_server
+	}
+
+	# infodots
+	handle_path /infodots/* {
+		root * /home/adabru/infodots/game
+		file_server
+	}
+}
+
+infoaghh.de {
+	root * /home/adabru/infoaghh
+	file_server
+}
+
+pocozy.de, pocozy.com {
+	root * /home/adabru/pocozy_homepage/www
+	file_server
+}
