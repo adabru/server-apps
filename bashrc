@@ -15,6 +15,18 @@ export PATH="$HOME/bin:$PATH"
 alias ..='cd ..'
 alias ...='cd ../..'
 
+alias update_keyring='sudo pacman -Sy archlinux-keyring'
+alias update='sudo pacman -Syyu'
+alias i="sudo pacman -S"
+alias u="sudo pacman -Rs"
+alias chx='chmod +x'
+alias remove_orphans='sudo pacman -Rns $(pacman -Qtdq)'
+
+alias ls='ls --color=auto'
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+
 alias ga='git add'
 alias gall='git add -A'
 alias gs='git status'

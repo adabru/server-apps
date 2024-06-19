@@ -20,7 +20,7 @@ def base():
     pacman.packages(name="Install packages.", packages=["nginx", "webhook", "acme.sh"])
 
     # .bashrc
-    files.put(name="Update .bashrc.", src="bashrc", dest="/home/{admin}/.bashrc")
+    files.put(name="Update .bashrc.", src="bashrc", dest=f"/home/{admin}/.bashrc")
 
 
 def nginx():
@@ -118,8 +118,8 @@ def telegram():
     )
     pip.packages(
         name="Install Python packages from requirements.txt",
-        packages="/home/{admin}/telegram/requirements.txt",
-        virtualenv="/home/{admin}/.venv/telegram",
+        packages=f"/home/{admin}/telegram/requirements.txt",
+        virtualenv=f"/home/{admin}/.venv/telegram",
         virtualenv_kwargs={"venv": True},
         present=True,
     )
@@ -131,6 +131,8 @@ def telegram():
     #     reloaded=True,
     # )
 
+def nextcloud():
+    # i docker
 
 tags = os.environ.get("TAGS", "base,nginx,filesharing,webhooks,telegram").split(",")
 print(f"Running tasks: {tags}")
