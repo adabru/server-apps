@@ -5,3 +5,4 @@
 
 .env
 telegram/private-key.json
+pyinfra-debug.log

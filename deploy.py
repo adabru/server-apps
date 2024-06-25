@@ -2,6 +2,10 @@ from getpass import getuser
 import os
 from pyinfra.operations import pacman, systemd, files, server, pip
 from pyinfra import config
+from pyinfra import host
+from pyinfra.facts.hardware import Ipv4Addresses
+from pyinfra.api import operation
+
 
 # load .env
 with open(".env", "r") as fh:
@@ -17,7 +21,7 @@ admin = getuser()
 
 
 def base():
-    pacman.packages(name="Install packages.", packages=["caddy", "webhook"])
+    pacman.packages(name="Install packages.", packages=["caddy", "webhook", "docker"])
 
     # .bashrc
     files.put(name="Update .bashrc.", src="bashrc", dest=f"/home/{admin}/.bashrc")
@@ -121,8 +125,38 @@ def telegram():
 
 
 def nextcloud():
-    # i docker
-    pass
+    @operation()
+    def Log(msg):
+        host.noop(msg)
+        if False:
+            yield
+
+    ip_addresses = host.get_fact(Ipv4Addresses)
+    public_ip = None
+    for interface, ip in ip_addresses.items():
+        if not ip.startswith(("127.", "172.")):
+            public_ip = ip
+            break
+    Log(
+        "Instructions are available at https://github.com/nextcloud/all-in-one/blob/main/reverse-proxy.md"
+    )
+    Log(f"Nextcloud aio-setup will run on https://{public_ip}:8080")
+    server.shell(
+        name="Run Nextcloud Docker container",
+        commands="""
+        docker run \
+        --init \
+        --sig-proxy=false \
+        --name nextcloud-aio-mastercontainer \
+        --restart always \
+        --publish 8080:8080 \
+        --env APACHE_PORT=11000 \
+        --env APACHE_IP_BINDING=127.0.0.1 \
+        --volume nextcloud_aio_mastercontainer:/mnt/docker-aio-config \
+        --volume /var/run/docker.sock:/var/run/docker.sock:ro \
+        nextcloud/all-in-one:latest
+        """,
+    )
 
 
 tags = os.environ.get("TAGS", "base,caddy,filesharing,webhooks,telegram").split(",")

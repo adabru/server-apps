@@ -39,3 +39,8 @@ pocozy.de, pocozy.com {
 	root * /home/adabru/pocozy_homepage/www
 	file_server
 }
+
+# https://github.com/nextcloud/all-in-one/blob/main/reverse-proxy.md
+https://nextcloud.adabru.de:443 {
+    reverse_proxy localhost:11000
+}
