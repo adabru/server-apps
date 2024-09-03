@@ -60,12 +60,11 @@ For local development:
 # initial setup
 python -m venv .telegram
 # "select interpreter" in vscode
-pip install google-cloud-speech python-telegram-bot
+pip install google-cloud-speech google-cloud-translate python-telegram-bot
 pip freeze > telegram/requirements.txt
 
 # start bot
 . .env
-export TELEGRAM_BOT_TOKEN
-./telegram/telegrambot.py
+pymon ./telegram/telegrambot.py
 # open at t.me/adabru_de_transcribe_bot
 ```

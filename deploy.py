@@ -73,6 +73,7 @@ def filesharing():
 
 def webhooks():
     # webhooks
+    # https://github.com/adnanh/webhook/blob/master/docs/Hook-Definition.md
     files.template(
         name="Update webhook config.",
         src="webhook/hooks.json.j2",
