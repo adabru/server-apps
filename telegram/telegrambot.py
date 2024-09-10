@@ -109,6 +109,10 @@ async def translate(update: Update, context):
         await context.bot.send_message(chat_id=update.effective_chat.id, text="✘")
 
 
+async def readout(update: Update, context):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="🔉...")
+
+
 async def help(update: Update, context):
     keyboard = [[InlineKeyboardButton("Translate", callback_data="translate")]]
 
@@ -132,8 +136,14 @@ async def echo(update: Update, context):
     )
 
 
+def render_button(text: str, data: str):
+    keyboard = [[InlineKeyboardButton(text, callback_data=data)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return reply_markup
+
+
 # transcribe
-async def transcribe(update: Update, context):
+async def transcribe_and_translate(update: Update, context):
     print("voice")
     # # show typing status
     # await context.bot.send_chat_action(
@@ -146,12 +156,27 @@ async def transcribe(update: Update, context):
         # get audio
         voice = await update.message.voice.get_file()
         voice_data: bytearray = await voice.download_as_bytearray()
+        # transcribe
         transcribed = await google_speech_to_text(project_id, bytes(voice_data))
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
             text=transcribed,
         )
+        # translate
+        bot_message = await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="文A ..."
+        )
+        translated = google_translate_text(
+            transcribed, project_id, languages[0], languages[1]
+        )
+        await context.bot.edit_message_text(
+            chat_id=update.effective_chat.id,
+            message_id=bot_message.message_id,
+            text=translated,
+            reply_markup=render_button("🔉", "readout"),
+        )
+
     except Exception as e:
         print(e)
         await context.bot.edit_message_text(
@@ -163,11 +188,14 @@ async def transcribe(update: Update, context):
 
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()
-
-    if query.data == "translate":
-        print("translate")
-        await translate(update, context)
+    # if query.data == "translate":
+    #     print("translate")
+    #     await translate(update, context)
+    if query.data == "readout":
+        print("readout")
+        print(query.message.text)
+        await readout(update, context)
+        await query.answer()
 
 
 if __name__ == "__main__":
@@ -190,21 +218,24 @@ if __name__ == "__main__":
     )
 
     translate_handler = CommandHandler("translate", translate)
-    help_handler = CommandHandler("help", help)
     application.add_handler(translate_handler)
+    help_handler = CommandHandler("help", help)
     application.add_handler(help_handler)
 
     application.add_handler(CallbackQueryHandler(button))
 
     echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
-    voice_handler = MessageHandler(filters.VOICE, transcribe, block=False)
+    voice_handler = MessageHandler(filters.VOICE, transcribe_and_translate, block=False)
     application.add_handler(voice_handler)
 
     application.run_polling()
 
-# auto-translate transcribed text
-#  find out language
-# google_text_to_speech
-# button to speak
+# command to set language codes
+# first test
 # run pyinfra
+# google_text_to_speech
 # -->
+
+# cutoffs:
+# - hardcode languages
+# - show button every time
