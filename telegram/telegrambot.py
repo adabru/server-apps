@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
-# https://cloud.google.com/speech-to-text/v2/docs/chirp-model
 # https://github.com/python-telegram-bot/python-telegram-bot/wiki/Extensions---Your-first-Bot
 
 import logging
 import os
 
+from db import load_db, save_db
+from google.api_core import client_options
 from google.cloud.speech_v2 import SpeechClient
 from google.cloud.speech_v2.types import cloud_speech
 from google.cloud.translate_v3.services.translation_service import (
@@ -13,6 +14,7 @@ from google.cloud.translate_v3.services.translation_service import (
 )
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ReactionEmoji
 from telegram.ext import (
     ApplicationBuilder,
     CallbackContext,
@@ -28,7 +30,16 @@ logging.basicConfig(
 
 project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 telegram_bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-languages = ["de-DE", "en-US"]
+# https://cloud.google.com/speech-to-text/v2/docs/speech-to-text-supported-languages
+LANGUAGE_CODES = {"de-DE", "en-US", "uk-UA"}
+
+
+config = load_db("config")
+if not "trainer_language" in config:
+    config["trainer_language"] = "de"
+if not "learner_language" in config:
+    config["learner_language"] = "en"
+print(config)
 
 
 # https://cloud.google.com/translate/docs/advanced/translate-text-advance
@@ -59,26 +70,33 @@ def google_translate_text(
     return response.translations[0].translated_text
 
 
+# https://cloud.google.com/speech-to-text/v2/docs/chirp-model
 async def google_speech_to_text(
     project_id: str,
     audio_data: bytes,
 ) -> cloud_speech.RecognizeResponse:
     """Transcribe an audio file."""
+    # regional endpoint for more features for uk-UA
+    # https://cloud.google.com/speech-to-text/docs/endpoints
+    _client_options = client_options.ClientOptions(
+        api_endpoint="europe-west4-speech.googleapis.com"
+    )
+
     # Instantiates a client
-    client = SpeechClient()
+    client = SpeechClient(client_options=_client_options)
 
     features = cloud_speech.RecognitionFeatures(enable_automatic_punctuation=True)
 
-    config = cloud_speech.RecognitionConfig(
+    recognitionConfig = cloud_speech.RecognitionConfig(
         auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
-        language_codes=languages,
-        model="long",
+        language_codes=[config["learner_language"]],
+        model="chirp",
         features=features,
     )
 
     request = cloud_speech.RecognizeRequest(
-        recognizer=f"projects/{project_id}/locations/global/recognizers/_",
-        config=config,
+        recognizer=f"projects/{project_id}/locations/europe-west4/recognizers/_",
+        config=recognitionConfig,
         content=audio_data,
     )
 
@@ -93,7 +111,25 @@ async def google_speech_to_text(
     return recognized_text
 
 
-async def translate(update: Update, context):
+async def config_command(update: Update, context):
+    # set language codes like "/config de-DE en-US"
+    try:
+        (trainer_language, learner_language) = update.message.text.split(" ")[1:]
+        if (
+            not trainer_language in LANGUAGE_CODES
+            or not learner_language in LANGUAGE_CODES
+        ):
+            raise ValueError("Invalid language codes")
+        config["trainer_language"] = trainer_language
+        config["learner_language"] = learner_language
+        save_db("config", config)
+        await update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
+    except ValueError as e:
+        print(e)
+        await update.message.set_reaction(ReactionEmoji.SHRUG)
+
+
+async def translate_command(update: Update, context):
     print("button pressed!")
     await context.bot.send_message(chat_id=update.effective_chat.id, text="...")
     try:
@@ -113,7 +149,7 @@ async def readout(update: Update, context):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="🔉...")
 
 
-async def help(update: Update, context):
+async def help_command(update: Update, context):
     keyboard = [[InlineKeyboardButton("Translate", callback_data="translate")]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -168,7 +204,10 @@ async def transcribe_and_translate(update: Update, context):
             chat_id=update.effective_chat.id, text="文A ..."
         )
         translated = google_translate_text(
-            transcribed, project_id, languages[0], languages[1]
+            transcribed,
+            project_id,
+            config["learner_language"],
+            config["trainer_language"],
         )
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
@@ -209,7 +248,7 @@ if __name__ == "__main__":
     # # translate "Hello, world!"
     # text_data = "Hello, world!"
     # translated = google_translate_text(
-    #     text_data, project_id, languages[1], languages[0]
+    #     text_data, project_id, "en", "de"
     # )
     # print(translated)
 
@@ -217,10 +256,12 @@ if __name__ == "__main__":
         ApplicationBuilder().token(telegram_bot_token).concurrent_updates(True).build()
     )
 
-    translate_handler = CommandHandler("translate", translate)
+    translate_handler = CommandHandler("translate", translate_command)
     application.add_handler(translate_handler)
-    help_handler = CommandHandler("help", help)
+    help_handler = CommandHandler("help", help_command)
     application.add_handler(help_handler)
+    config_handler = CommandHandler("config", config_command)
+    application.add_handler(config_handler)
 
     application.add_handler(CallbackQueryHandler(button))
 
@@ -230,7 +271,6 @@ if __name__ == "__main__":
 
     application.run_polling()
 
-# command to set language codes
 # first test
 # run pyinfra
 # google_text_to_speech

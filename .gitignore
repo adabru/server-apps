@@ -3,6 +3,8 @@
 .pyinfra/
 .telegram/
 
+__pycache__/
 .env
 telegram/private-key.json
+telegram/db/
 pyinfra-debug.log
