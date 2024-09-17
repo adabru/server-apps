@@ -64,7 +64,6 @@ pip install google-cloud-speech google-cloud-translate python-telegram-bot
 pip freeze > telegram/requirements.txt
 
 # start bot
-. .env
-pymon ./telegram/telegrambot.py
+set -a && . telegram/.env && set +a && pymon ./telegram/telegrambot.py
 # open at t.me/adabru_de_transcribe_bot
 ```

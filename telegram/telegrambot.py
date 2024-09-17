@@ -113,20 +113,27 @@ async def google_speech_to_text(
 
 async def config_command(update: Update, context):
     # set language codes like "/config de-DE en-US"
-    try:
-        (trainer_language, learner_language) = update.message.text.split(" ")[1:]
-        if (
-            not trainer_language in LANGUAGE_CODES
-            or not learner_language in LANGUAGE_CODES
-        ):
-            raise ValueError("Invalid language codes")
-        config["trainer_language"] = trainer_language
-        config["learner_language"] = learner_language
-        save_db("config", config)
-        await update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
-    except ValueError as e:
-        print(e)
-        await update.message.set_reaction(ReactionEmoji.SHRUG)
+    if update.message.text == "/config":
+        # show current config
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"trainer: {config['trainer_language']}\nlearner: {config['learner_language']}",
+        )
+    else:
+        try:
+            (trainer_language, learner_language) = update.message.text.split(" ")[1:]
+            if (
+                not trainer_language in LANGUAGE_CODES
+                or not learner_language in LANGUAGE_CODES
+            ):
+                raise ValueError("Invalid language codes")
+            config["trainer_language"] = trainer_language
+            config["learner_language"] = learner_language
+            save_db("config", config)
+            await update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
+        except ValueError as e:
+            print(e)
+            await update.message.set_reaction(ReactionEmoji.SHRUG)
 
 
 async def translate_command(update: Update, context):
@@ -272,10 +279,9 @@ if __name__ == "__main__":
     application.run_polling()
 
 # first test
-# run pyinfra
+# config per chat
 # google_text_to_speech
 # -->
 
 # cutoffs:
-# - hardcode languages
 # - show button every time

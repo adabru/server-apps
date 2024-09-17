@@ -1,11 +1,10 @@
-from getpass import getuser
 import os
-from pyinfra.operations import pacman, systemd, files, server, pip
-from pyinfra import config
-from pyinfra import host
-from pyinfra.facts.hardware import Ipv4Addresses
-from pyinfra.api import operation
+from getpass import getuser
 
+from pyinfra import config, host
+from pyinfra.api import operation
+from pyinfra.facts.hardware import Ipv4Addresses
+from pyinfra.operations import files, pacman, pip, server, systemd
 
 # load .env
 with open(".env", "r") as fh:
@@ -21,7 +20,9 @@ admin = getuser()
 
 
 def base():
-    pacman.packages(name="Install packages.", packages=["caddy", "webhook", "docker"])
+    pacman.packages(
+        name="Install packages.", packages=["caddy", "webhook", "docker", "python"]
+    )
 
     # .bashrc
     files.put(name="Update .bashrc.", src="bashrc", dest=f"/home/{admin}/.bashrc")
@@ -111,18 +112,18 @@ def telegram():
     )
     pip.packages(
         name="Install Python packages from requirements.txt",
-        packages=f"/home/{admin}/telegram/requirements.txt",
+        requirements=f"/home/{admin}/telegram/requirements.txt",
         virtualenv=f"/home/{admin}/.venv/telegram",
         virtualenv_kwargs={"venv": True},
         present=True,
     )
-    # systemd.service(
-    #     name="Update telegrambot service.",
-    #     service="telegrambot",
-    #     running=True,
-    #     enabled=True,
-    #     reloaded=True,
-    # )
+    systemd.service(
+        name="Update telegrambot service.",
+        service="telegrambot",
+        running=True,
+        enabled=True,
+        reloaded=True,
+    )
 
 
 def nextcloud():

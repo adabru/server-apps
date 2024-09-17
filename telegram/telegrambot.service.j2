@@ -5,6 +5,7 @@ Description=Telegram bot to transcribe and translate voice messages.
 Type=simple
 ExecStart=/home/{{ __admin }}/.venv/telegram/bin/python /home/{{ __admin }}/telegram/telegrambot.py
 Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/{{ __admin }}/telegram/private-key.json
+EnvironmentFile=/home/{{ __admin }}/telegram/.env
 Restart=on-failure
 RestartSec=30s
 
