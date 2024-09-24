@@ -133,7 +133,9 @@ async def config_command(update: Update, context):
             ):
                 raise ValueError("Invalid language codes")
             config.chats[update.effective_chat.id] = ChatConfig(
-                trainer_language=trainer_language, learner_language=learner_language
+                trainer_language=trainer_language,
+                learner_language=learner_language,
+                trainer_id=update.message.from_user.id,
             )
             save_db("config", asdict(config))
             await update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
@@ -179,6 +181,7 @@ def render_button(text: str, data: str):
 async def transcribe_and_translate(update: Update, context):
     print("voice")
     chat_config = get_config(update.effective_chat.id)
+    is_trainer = update.message.from_user.id == chat_config.trainer_id
     bot_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="🎙..."
     )
@@ -186,32 +189,38 @@ async def transcribe_and_translate(update: Update, context):
         # get audio
         voice = await update.message.voice.get_file()
         voice_data: bytearray = await voice.download_as_bytearray()
+
         # transcribe
+        voice_language = (
+            chat_config.trainer_language if is_trainer else chat_config.learner_language
+        )
         transcribed = await google_speech_to_text(
             project_id=project_id,
             audio_data=bytes(voice_data),
-            language_codes=[chat_config.learner_language],
+            language_codes=[voice_language],
         )
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
             text=transcribed,
         )
+
         # translate
-        bot_message = await context.bot.send_message(
-            chat_id=update.effective_chat.id, text="文A ..."
-        )
-        translated = google_translate_text(
-            transcribed,
-            project_id,
-            chat_config.learner_language,
-            chat_config.trainer_language,
-        )
-        await context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=bot_message.message_id,
-            text=translated,
-        )
+        if not is_trainer:
+            bot_message = await context.bot.send_message(
+                chat_id=update.effective_chat.id, text="文A ..."
+            )
+            translated = google_translate_text(
+                transcribed,
+                project_id,
+                chat_config.learner_language,
+                chat_config.trainer_language,
+            )
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=bot_message.message_id,
+                text=translated,
+            )
 
     except Exception as e:
         print(e)
@@ -267,5 +276,4 @@ if __name__ == "__main__":
 
     application.run_polling()
 
-# german dictation
 # second test

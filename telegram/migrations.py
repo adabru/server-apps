@@ -6,6 +6,7 @@ from typing import Dict
 class ChatConfig:
     trainer_language: str = "de-DE"
     learner_language: str = "en-US"
+    trainer_id: int = -1
 
 
 @dataclass
