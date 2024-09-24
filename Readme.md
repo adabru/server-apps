@@ -30,6 +30,8 @@ Store API token in .env.
 
 Edit the bot in the chat, "Allow Groups?" -> "Turn groups on", "Groups Privacy" -> "Turn off", "Edit Botpic".
 
+Repeat with for transcribe_dev, adabru_de_transcribe_dev_bot, store token in dev.env .
+
 Enable google APIs: https://console.cloud.google.com/flows/enableapi?apiid=iam.googleapis.com,cloudresourcemanager.googleapis.com,speech.googleapis.com
 
 Create google service account (api key equivalent):
@@ -64,6 +66,6 @@ pip install google-cloud-speech google-cloud-translate python-telegram-bot
 pip freeze > telegram/requirements.txt
 
 # start bot
-set -a && . telegram/.env && set +a && pymon ./telegram/telegrambot.py
+set -a && . telegram/dev.env && set +a && pymon ./telegram/telegrambot.py
 # open at t.me/adabru_de_transcribe_bot
 ```

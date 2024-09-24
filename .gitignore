@@ -5,6 +5,7 @@
 
 __pycache__/
 .env
+dev.env
 telegram/private-key.json
 telegram/db/
 pyinfra-debug.log

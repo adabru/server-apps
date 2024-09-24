@@ -4,6 +4,7 @@
 
 import logging
 import os
+from dataclasses import asdict
 
 from db import load_db, save_db
 from google.api_core import client_options
@@ -12,6 +13,7 @@ from google.cloud.speech_v2.types import cloud_speech
 from google.cloud.translate_v3.services.translation_service import (
     TranslationServiceClient,
 )
+from migrations import ChatConfig, migrate
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ReactionEmoji
@@ -34,11 +36,8 @@ telegram_bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
 LANGUAGE_CODES = {"de-DE", "en-US", "uk-UA"}
 
 
-config = load_db("config")
-if not "trainer_language" in config:
-    config["trainer_language"] = "de"
-if not "learner_language" in config:
-    config["learner_language"] = "en"
+serialized_config = load_db("config")
+config = migrate(serialized_config)
 print(config)
 
 
@@ -52,7 +51,6 @@ def google_translate_text(
     client = TranslationServiceClient()
 
     parent = f"projects/{project_id}"
-    print(parent)
 
     # Translate text from English to French
     # Detail on supported types can be found here:
@@ -74,6 +72,7 @@ def google_translate_text(
 async def google_speech_to_text(
     project_id: str,
     audio_data: bytes,
+    language_codes: list[str] = ["de-DE"],
 ) -> cloud_speech.RecognizeResponse:
     """Transcribe an audio file."""
     # regional endpoint for more features for uk-UA
@@ -89,7 +88,7 @@ async def google_speech_to_text(
 
     recognitionConfig = cloud_speech.RecognitionConfig(
         auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
-        language_codes=[config["learner_language"]],
+        language_codes=language_codes,
         model="chirp",
         features=features,
     )
@@ -111,13 +110,19 @@ async def google_speech_to_text(
     return recognized_text
 
 
+def get_config(chat_id: int) -> ChatConfig:
+    if chat_id in config.chats:
+        return config.chats[chat_id]
+    return config.default
+
+
 async def config_command(update: Update, context):
     # set language codes like "/config de-DE en-US"
     if update.message.text == "/config":
         # show current config
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"trainer: {config['trainer_language']}\nlearner: {config['learner_language']}",
+            text=asdict(get_config(update.effective_chat.id)),
         )
     else:
         try:
@@ -127,9 +132,10 @@ async def config_command(update: Update, context):
                 or not learner_language in LANGUAGE_CODES
             ):
                 raise ValueError("Invalid language codes")
-            config["trainer_language"] = trainer_language
-            config["learner_language"] = learner_language
-            save_db("config", config)
+            config.chats[update.effective_chat.id] = ChatConfig(
+                trainer_language=trainer_language, learner_language=learner_language
+            )
+            save_db("config", asdict(config))
             await update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
         except ValueError as e:
             print(e)
@@ -157,25 +163,9 @@ async def readout(update: Update, context):
 
 
 async def help_command(update: Update, context):
-    keyboard = [[InlineKeyboardButton("Translate", callback_data="translate")]]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="I'm a bot, please talk to me!",
-        reply_markup=reply_markup,
-    )
-
-
-async def echo(update: Update, context):
-    # show typing status
-    await context.bot.send_chat_action(
-        chat_id=update.effective_chat.id, action="typing"
-    )
-    # Echo the user's message back to them
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=update.message.text
+        text="/config\n/config [trainer] [learner]",
     )
 
 
@@ -188,10 +178,7 @@ def render_button(text: str, data: str):
 # transcribe
 async def transcribe_and_translate(update: Update, context):
     print("voice")
-    # # show typing status
-    # await context.bot.send_chat_action(
-    #     chat_id=update.effective_chat.id, action="typing"
-    # )
+    chat_config = get_config(update.effective_chat.id)
     bot_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="🎙..."
     )
@@ -200,7 +187,11 @@ async def transcribe_and_translate(update: Update, context):
         voice = await update.message.voice.get_file()
         voice_data: bytearray = await voice.download_as_bytearray()
         # transcribe
-        transcribed = await google_speech_to_text(project_id, bytes(voice_data))
+        transcribed = await google_speech_to_text(
+            project_id=project_id,
+            audio_data=bytes(voice_data),
+            language_codes=[chat_config.learner_language],
+        )
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
@@ -213,14 +204,13 @@ async def transcribe_and_translate(update: Update, context):
         translated = google_translate_text(
             transcribed,
             project_id,
-            config["learner_language"],
-            config["trainer_language"],
+            chat_config.learner_language,
+            chat_config.trainer_language,
         )
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
             text=translated,
-            reply_markup=render_button("🔉", "readout"),
         )
 
     except Exception as e:
@@ -272,16 +262,10 @@ if __name__ == "__main__":
 
     application.add_handler(CallbackQueryHandler(button))
 
-    echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
     voice_handler = MessageHandler(filters.VOICE, transcribe_and_translate, block=False)
     application.add_handler(voice_handler)
 
     application.run_polling()
 
-# first test
-# config per chat
-# google_text_to_speech
-# -->
-
-# cutoffs:
-# - show button every time
+# german dictation
+# second test
