@@ -122,7 +122,7 @@ def telegram():
         service="telegrambot",
         running=True,
         enabled=True,
-        reloaded=True,
+        restarted=True,
     )
 
 
