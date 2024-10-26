@@ -21,17 +21,33 @@ admin = getuser()
 
 def base():
     pacman.packages(
-        name="Install packages.", packages=["caddy", "webhook", "docker", "python"]
+        name="Install packages.",
+        packages=[
+            "caddy",
+            "webhook",
+            "docker",
+            "python",
+            "pacman-contrib",
+            "transmission-cli",
+        ],
     )
 
     # .bashrc
     files.put(name="Update .bashrc.", src="bashrc", dest=f"/home/{admin}/.bashrc")
 
+    server.user(
+        name="Add admin to transmission group.",
+        user=admin,
+        groups=[admin, "sudo", "transmission"],
+    )
+
 
 def caddy():
     # caddy
     server.user(
-        name="Add caddy user, include in admin group.", user="caddy", groups=[admin]
+        name="Add caddy user, include in admin and transmission group.",
+        user="caddy",
+        groups=[admin, "transmission"],
     )
     files.put(
         name="Update Caddyfile.",
@@ -64,11 +80,56 @@ def caddy():
 
 
 def filesharing():
-    # filesharing
+    # filesharing via caddy
     files.sync(
         name="Create folder for filesharing.",
         dest=f"/home/{admin}/filesharing",
         src="filesharing",
+        user=admin,
+        group=admin,
+    )
+
+    # filesharing via torrent
+    # https://wiki.archlinux.org/title/Transmission
+    # /var/lib/transmission/.config/transmission-daemon/settings.json
+
+    systemd.service(
+        name="Start transmission service.",
+        service="transmission",
+        running=True,
+        enabled=True,
+    )
+    # prepare transmission data dir as service might not have created it yet
+    files.directory(
+        name="Create folder for transmission.",
+        path="/var/lib/transmission",
+        mode="750",
+        user="transmission",
+        group="transmission",
+    )
+    files.directory(
+        name="Create folder for transmission Downloads.",
+        path="/var/lib/transmission/Downloads",
+        mode="775",
+        user="transmission",
+        group="transmission",
+    )
+    files.directory(
+        name="Create folder for transmission torrents.",
+        path="/var/lib/transmission/torrents",
+        mode="775",
+        user="transmission",
+        group="transmission",
+    )
+    files.link(
+        name="Link filesharing/transmission to transmission Downloads folder.",
+        path=f"/home/{admin}/filesharing/transmission",
+        target="/var/lib/transmission/Downloads",
+    )
+    files.link(
+        name="Link filesharing/torrents to transmission torrents folder.",
+        path=f"/home/{admin}/filesharing/torrents",
+        target="/var/lib/transmission/torrents",
     )
 
 
@@ -109,6 +170,7 @@ def telegram():
         name="Copy folder for telegram.",
         dest=f"/home/{admin}/telegram",
         src="telegram",
+        exclude_dir=["db"],
     )
     pip.packages(
         name="Install Python packages from requirements.txt",

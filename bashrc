@@ -54,3 +54,13 @@ prompt() {
 PROMPT_COMMAND=prompt
 
 alias t='trizen'
+
+# make file publicly available as torrent download
+seed() {
+  transmission-create -o ~/filesharing/torrents/$1.torrent $1 -t udp://tracker.opentrackr.org:1337/announce
+  chmod 644 torrents/$1.torrent
+  mv $1 ~/filesharing/transmission/
+  transmission-remote -a torrents/$1.torrent
+  transmission-remote -l
+}
+alias unseed='transmission-remote -t all -r'
