@@ -14,6 +14,7 @@ from google.cloud.translate_v3.services.translation_service import (
     TranslationServiceClient,
 )
 from migrations import ChatConfig, migrate
+from openai import OpenAI
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ReactionEmoji
@@ -25,6 +26,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+openai_client = OpenAI()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -178,10 +181,16 @@ def render_button(text: str, data: str):
 
 
 # transcribe
-async def transcribe_and_translate(update: Update, context):
+async def transcribe_and_translate(update: Update, context: CallbackContext):
     print("voice")
     chat_config = get_config(update.effective_chat.id)
     is_trainer = update.message.from_user.id == chat_config.trainer_id
+    from_language = (
+        chat_config.trainer_language if is_trainer else chat_config.learner_language
+    )
+    to_language = (
+        chat_config.learner_language if is_trainer else chat_config.trainer_language
+    )
     bot_message = await context.bot.send_message(
         chat_id=update.effective_chat.id, text="🎙..."
     )
@@ -191,9 +200,7 @@ async def transcribe_and_translate(update: Update, context):
         voice_data: bytearray = await voice.download_as_bytearray()
 
         # transcribe
-        voice_language = (
-            chat_config.trainer_language if is_trainer else chat_config.learner_language
-        )
+        voice_language = from_language
         transcribed = await google_speech_to_text(
             project_id=project_id,
             audio_data=bytes(voice_data),
@@ -202,24 +209,55 @@ async def transcribe_and_translate(update: Update, context):
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
-            text=transcribed,
+            text=f"```\n{transcribed}\n```",
+            parse_mode="MarkdownV2",
         )
 
         # translate
-        if not is_trainer:
+        bot_message = await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="文A ..."
+        )
+        translated = google_translate_text(
+            transcribed,
+            project_id,
+            from_language,
+            to_language,
+        )
+        await context.bot.edit_message_text(
+            chat_id=update.effective_chat.id,
+            message_id=bot_message.message_id,
+            text=f"```\n{translated}\n```",
+            parse_mode="MarkdownV2",
+        )
+
+        # provide the learner with possible answers to the trainer's message
+        if is_trainer:
             bot_message = await context.bot.send_message(
-                chat_id=update.effective_chat.id, text="文A ..."
+                chat_id=update.effective_chat.id,
+                text="✏️...",
             )
-            translated = google_translate_text(
-                transcribed,
-                project_id,
-                chat_config.learner_language,
-                chat_config.trainer_language,
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"You are a teacher in the ${from_language} language and particiapte in a group chat between a native speaker and an immigrant who learns the language and culture. The trainer speaks voice messages in ${from_language} and you want to provide the learner with three possible answers to the trainer's message. You provide them in ${from_language} to provide translations and explanations in ${to_language}.",
+                    },
+                    {"role": "assistant", "content": transcribed},
+                    {
+                        "role": "system",
+                        "content": "Provide the learner with possible answers to the trainer's message. Try to be short and concise.",
+                    },
+                ],
             )
+            suggestions = completion.choices[0].message.content
+
+            # print(completion.choices[0].message)
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=bot_message.message_id,
-                text=translated,
+                text=f"```\n{suggestions}\n```",
+                parse_mode="MarkdownV2",
             )
 
     except Exception as e:
@@ -250,6 +288,7 @@ if __name__ == "__main__":
     # audio_data = open(os.path.expanduser("~/s.flac"), "rb").read()
     # transcribed = google_speech_to_text("deutsch-training-413809", audio_data)
     # print(transcribed)
+    # exit()
 
     # # translate "Hello, world!"
     # text_data = "Hello, world!"
@@ -257,6 +296,22 @@ if __name__ == "__main__":
     #     text_data, project_id, "en", "de"
     # )
     # print(translated)
+    # exit()
+
+    # chatgpt complete
+    # completion = openai_client.chat.completions.create(
+    #     model="gpt-4o",
+    #     messages=[
+    #         {"role": "system", "content": "You are a helpful assistant."},
+    #         {
+    #             "role": "user",
+    #             "content": "Write a haiku about recursion in programming.",
+    #         },
+    #     ],
+    # )
+
+    # print(completion.choices[0].message)
+    # exit()
 
     application = (
         ApplicationBuilder().token(telegram_bot_token).concurrent_updates(True).build()
@@ -276,4 +331,11 @@ if __name__ == "__main__":
 
     application.run_polling()
 
-# second test
+# test
+# more context
+# übersetzungen
+# schwierigkeit konfigurierbar
+# conversation, comment on lanugage -> let them speak german
+#     -> chatgpt: translate if learner language, comment if german
+# test
+# fotos übersetzen

@@ -17,6 +17,10 @@ alias ...='cd ../..'
 
 alias update_keyring='sudo pacman -Sy archlinux-keyring'
 alias update='sudo pacman -Syyu'
+# https://wiki.archlinux.org/title/Mirrors#Fetching_and_ranking_a_live_mirror_list
+update_mirrors() {
+  curl -s "https://archlinux.org/mirrorlist/?country=DE&protocol=https&use_mirror_status=on" | sed -e 's/^#Server/Server/' -e '/^#/d' | rankmirrors -n 5 - >/etc/pacman.d/mirrorlist
+}
 alias i="sudo pacman -S"
 alias u="sudo pacman -Rs"
 alias chx='chmod +x'
@@ -43,8 +47,7 @@ prompt() {
     PS1="[\[\033[1;32m\]\W\[\033[22;39m\]] "
   fi
 
-  if git branch 1>/dev/null 2>&1
-  then
+  if git branch 1>/dev/null 2>&1; then
     PS1="$PS1\[\033[2;32m\]$(git branch --no-color | cut -d' ' -f2)\[\033[22;39m\] "
   fi
 }
