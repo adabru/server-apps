@@ -2,6 +2,7 @@
 
 # https://github.com/python-telegram-bot/python-telegram-bot/wiki/Extensions---Your-first-Bot
 
+import json
 import logging
 import os
 from dataclasses import asdict
@@ -114,37 +115,67 @@ async def google_speech_to_text(
 
 
 def get_config(chat_id: int) -> ChatConfig:
-    if chat_id in config.chats:
-        return config.chats[chat_id]
-    return config.default
+    if not chat_id in config.chats:
+        config.chats[chat_id] = ChatConfig()
+    return config.chats[chat_id]
+
+
+class ConfigureChat:
+    def __init__(self, update: Update):
+        self.update = update
+        self.chat = get_config(update.effective_chat.id)
+        args = update.message.text.split(" ")
+        if len(args) < 2:
+            self.value = None
+        else:
+            self.value = args[1]
+        self.chat.trainer_id = update.message.from_user.id
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            print(f"A{exc_type.__name__}: {exc_val}")
+            await self.update.message.set_reaction(ReactionEmoji.SHRUG)
+        else:
+            save_db("config", asdict(config))
+            await self.update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
+
+
+async def lang_command(update: Update, context):
+    async with ConfigureChat(update) as configure:
+        if not configure.value in LANGUAGE_CODES:
+            raise ValueError("Invalid language code")
+        configure.chat.trainer_language = configure.value
+
+
+async def otherlang_command(update: Update, context):
+    async with ConfigureChat(update) as configure:
+        if not configure.value in LANGUAGE_CODES:
+            raise ValueError("Invalid language code")
+        configure.chat.learner_language = configure.value
+
+
+async def suggestions_command(update: Update, context):
+    async with ConfigureChat(update) as configure:
+        if configure.value == "on":
+            configure.chat.suggestions = True
+        elif configure.value == "off":
+            configure.chat.suggestions = False
+        else:
+            raise ValueError("Invalid value")
 
 
 async def config_command(update: Update, context):
-    # set language codes like "/config de-DE en-US"
-    if update.message.text == "/config":
-        # show current config
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=asdict(get_config(update.effective_chat.id)),
-        )
-    else:
-        try:
-            (trainer_language, learner_language) = update.message.text.split(" ")[1:]
-            if (
-                not trainer_language in LANGUAGE_CODES
-                or not learner_language in LANGUAGE_CODES
-            ):
-                raise ValueError("Invalid language codes")
-            config.chats[update.effective_chat.id] = ChatConfig(
-                trainer_language=trainer_language,
-                learner_language=learner_language,
-                trainer_id=update.message.from_user.id,
-            )
-            save_db("config", asdict(config))
-            await update.message.set_reaction(ReactionEmoji.OK_HAND_SIGN)
-        except ValueError as e:
-            print(e)
-            await update.message.set_reaction(ReactionEmoji.SHRUG)
+    # show current config
+    config = get_config(update.effective_chat.id)
+    pretty_config = json.dumps(asdict(config), indent=4)
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"<blockquote>{pretty_config}</blockquote>",
+        parse_mode="HTML",
+    )
 
 
 async def translate_command(update: Update, context):
@@ -170,7 +201,13 @@ async def readout(update: Update, context):
 async def help_command(update: Update, context):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="/config\n/config [trainer] [learner]",
+        text=f"""
+/lang de-DE
+/otherlang de-DE
+/suggestions on|off
+/config
+Languages: {" ".join(LANGUAGE_CODES)}
+""",
     )
 
 
@@ -209,8 +246,8 @@ async def transcribe_and_translate(update: Update, context: CallbackContext):
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
-            text=f"```\n{transcribed}\n```",
-            parse_mode="MarkdownV2",
+            text=f"<blockquote>{transcribed}</blockquote>",
+            parse_mode="HTML",
         )
 
         # translate
@@ -226,12 +263,12 @@ async def transcribe_and_translate(update: Update, context: CallbackContext):
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=bot_message.message_id,
-            text=f"```\n{translated}\n```",
-            parse_mode="MarkdownV2",
+            text=f"<blockquote>{translated}</blockquote>",
+            parse_mode="HTML",
         )
 
         # provide the learner with possible answers to the trainer's message
-        if is_trainer:
+        if chat_config.suggestions and is_trainer:
             bot_message = await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="✏️...",
@@ -256,8 +293,8 @@ async def transcribe_and_translate(update: Update, context: CallbackContext):
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=bot_message.message_id,
-                text=f"```\n{suggestions}\n```",
-                parse_mode="MarkdownV2",
+                text=f"<blockquote>{suggestions}</blockquote>",
+                parse_mode="HTML",
             )
 
     except Exception as e:
@@ -317,12 +354,12 @@ if __name__ == "__main__":
         ApplicationBuilder().token(telegram_bot_token).concurrent_updates(True).build()
     )
 
-    translate_handler = CommandHandler("translate", translate_command)
-    application.add_handler(translate_handler)
-    help_handler = CommandHandler("help", help_command)
-    application.add_handler(help_handler)
-    config_handler = CommandHandler("config", config_command)
-    application.add_handler(config_handler)
+    application.add_handler(CommandHandler("translate", translate_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("lang", lang_command))
+    application.add_handler(CommandHandler("otherlang", otherlang_command))
+    application.add_handler(CommandHandler("suggestions", suggestions_command))
+    application.add_handler(CommandHandler("config", config_command))
 
     application.add_handler(CallbackQueryHandler(button))
 
@@ -331,11 +368,8 @@ if __name__ == "__main__":
 
     application.run_polling()
 
+# fotos übersetzen
 # test
-# more context
-# übersetzungen
-# schwierigkeit konfigurierbar
 # conversation, comment on lanugage -> let them speak german
 #     -> chatgpt: translate if learner language, comment if german
 # test
-# fotos übersetzen

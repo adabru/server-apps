@@ -64,3 +64,4 @@ seed() {
   transmission-remote -l
 }
 alias unseed='transmission-remote -t all -r'
+alias seeds='transmission-remote -l'
